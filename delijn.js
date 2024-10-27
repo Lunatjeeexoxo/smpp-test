@@ -1,3 +1,6 @@
+let gc_is_open = false;
+let gc_initialized = false;
+
 async function fetchData(entiteit, halte) {
   const apiKey = 'ddb68605719d4bb8b6444b6871cefc7a';
   const apiUrl = `https://api.delijn.be/DLKernOpenData/api/v1/haltes/${entiteit}/${halte}/real-time?maxAantalDoorkomsten=5`;
@@ -19,9 +22,21 @@ async function fetchData(entiteit, halte) {
     handleFetchError();
   }
 }
+
 async function fetchLijnData(entiteitnummer, lijnnummer) {
   const fetch_url = `https://api.delijn.be/DLKernOpenData/api/v1/lijnen/${entiteitnummer}/${lijnnummer}`;
-  return await fetchApiData(fetch_url);
+  try {
+    const response = await fetch(fetch_url, {
+      headers: {
+        'Ocp-Apim-Subscription-Key': 'ddb68605719d4bb8b6444b6871cefc7a',
+      },
+    });
+    if (!response.ok) throw new Error('Lijn data could not be retrieved.');
+    return await response.json();
+  } catch (error) {
+    console.error("Error fetching lijn data:", error);
+    return null;
+  }
 }
 
 async function createApplication(data) {
@@ -34,76 +49,61 @@ async function createApplication(data) {
   }
 
   clearLeftbottom();
-
   const { doorkomsten } = data.halteDoorkomsten[0];
 
   for (const doorkomst of doorkomsten) {
-    var { entiteitnummer, bestemming, lijnnummer, dienstregelingTijdstip } = doorkomst;
-    perLijnData = await fetchLijnData(entiteitnummer, lijnnummer)
-    lijnnummer = perLijnData.lijnnummerPubliek
-    const real_timeTijdstip = doorkomst["real-timeTijdstip"]
-    const date = new Date(dienstregelingTijdstip);
-    const currentdate = new Date();
-    const currenthour = currentdate.getHours();
-    const currentminute = currentdate.getMinutes();
-    const hour = date.getHours();
-    let minute = date.getMinutes();
+    const { entiteitnummer, bestemming, lijnnummer, dienstregelingTijdstip } = doorkomst;
+    const perLijnData = await fetchLijnData(entiteitnummer, lijnnummer);
+    const lijnnummerPubliek = perLijnData ? perLijnData.lijnnummerPubliek : lijnnummer;
 
-    const totalMinutes = hour * 60 + minute;
-    const totalMinutescurrent = currenthour * 60 + currentminute;
+    const dienstregelingDate = new Date(dienstregelingTijdstip);
+    const currentDate = new Date();
+    const dienstregelingMinutes = dienstregelingDate.getHours() * 60 + dienstregelingDate.getMinutes();
+    const currentMinutes = currentDate.getHours() * 60 + currentDate.getMinutes();
+    let timeTillDeparture = dienstregelingMinutes - currentMinutes;
 
     let timeDifference = 'No data';
-    let timetilldep = totalMinutes - totalMinutescurrent;
-
-    if (real_timeTijdstip != undefined) {
-      console.error("real_timeTijdstip is not undefined")
-      const realtimedate = new Date(real_timeTijdstip);
-      const hourrealtime = realtimedate.getHours();
-      let minuterealtime = realtimedate.getMinutes();
-      const totalMinutesrealtime = hourrealtime * 60 + minuterealtime;
-      timeDifference = totalMinutesrealtime - totalMinutes;
-      timetilldep = totalMinutesrealtime - totalMinutescurrent;
-      if (timeDifference === 0) {
-        timeDifference = 'On time';
-      } else if (timeDifference > 0) {
-        timeDifference = `+${timeDifference}`;
-      }
+    const realTimeTijdstip = doorkomst["real-timeTijdstip"];
+    if (realTimeTijdstip !== undefined) {
+      const realTimeDate = new Date(realTimeTijdstip);
+      const realTimeMinutes = realTimeDate.getHours() * 60 + realTimeDate.getMinutes();
+      timeDifference = realTimeMinutes - dienstregelingMinutes;
+      timeTillDeparture = realTimeMinutes - currentMinutes;
+      timeDifference = timeDifference === 0 ? 'On time' : `+${timeDifference}`;
     }
-    if (timetilldep < -1000) {
-      timetilldep += 1440;
+    
+    if (timeTillDeparture < -1000) {
+      timeTillDeparture += 1440;
     }
-    minute = minute.toString().padStart(2, '0');
 
-    const div = document.createElement('div');
-    div.innerHTML = `<div class=lijncards>
-      <div class="top">
-        <h2 class=lijncardstitle>${lijnnummer}</h2>
-        <div class="topright">
-          <h3 class=lijncardsdestin>${bestemming}</h3>
-          <p class="timedifference">${timeDifference}</p>
+    const minute = dienstregelingDate.getMinutes().toString().padStart(2, '0');
+    const cardHTML = `
+      <div class=lijncards>
+        <div class="top">
+          <h2 class=lijncardstitle>${lijnnummerPubliek}</h2>
+          <div class="topright">
+            <h3 class=lijncardsdestin>${bestemming}</h3>
+            <p class="timedifference">${timeDifference}</p>
+          </div>
         </div>
-      </div>
-      <div class="times">
-        <span class="time">${hour}:${minute}</span>
-        <span class="intime">${timetilldep} Min.</span>
-      </div>
-    </div>`;
+        <div class="times">
+          <span class="time">${dienstregelingDate.getHours()}:${minute}</span>
+          <span class="intime">${timeTillDeparture} Min.</span>
+        </div>
+      </div>`;
 
-    leftContainerbottom.appendChild(div);
+    leftContainerbottom.insertAdjacentHTML('beforeend', cardHTML);
   }
 
-  const lastdiv = document.createElement('div');
-  if (Math.random() < 0.1) {
-    lastdiv.innerHTML = `<div class=lastdiv><a href="https://www.coolblue.be/nl/koffiezetapparaten/koffiezetapparaten-voor-latte-macchiato?utm_source=bing&utm_medium=cpc&utm_content=search&cmt=c_b,cp_554669870,aid_1297424829986242,t_kwd-81089287897708:loc-14,n_o,d_c,lp_611&msclkid=1f7482f3ed5c1b56a37de72c7f194ba4" target="_blank">Latte?</a></div>`;
-  } else {
-    lastdiv.innerHTML = `<div class=lastdiv><a href="https://www.delijn.be/nl/contact/attest-aanvraag/" target="_blank">Late?</a></div>`;
-  }
-  leftContainerbottom.appendChild(lastdiv);
+  const randomLink = Math.random() < 0.1
+    ? `<a href="https://www.coolblue.be/nl/koffiezetapparaten/koffiezetapparaten-voor-latte-macchiato" target="_blank">Latte?</a>`
+    : `<a href="https://www.delijn.be/nl/contact/attest-aanvraag/" target="_blank">Late?</a>`;
+  leftContainerbottom.insertAdjacentHTML('beforeend', `<div class=lastdiv>${randomLink}</div>`);
 }
 
 function handleFetchError() {
   const leftContainerbottom = document.getElementById('leftContainerbottom');
-  if (!leftContainerbottom || leftContainerbottom.innerText === 'There are no buses for this stop at the moment.') {
+  if (leftContainerbottom && !leftContainerbottom.innerHTML.includes('There are no buses')) {
     leftContainerbottom.innerHTML = '<p class=lijninfo>Could not fetch data, please try again later...</p>';
   }
 }
