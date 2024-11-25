@@ -77,3 +77,12 @@ function reset_reply() {
   current_reply = null;
   open_global_chat();  // Heropen de chat zonder een reply
 }
+
+// Voeg een event listener toe aan berichten zodat gebruikers erop kunnen klikken om te reageren
+document.addEventListener("click", function (e) {
+  // Controleer of de klik op een bericht is en of het de 'reply'-knop betreft
+  if (e.target.classList.contains("reply-button")) {
+    const messageId = e.target.closest(".chat-message").getAttribute("data-id");  // Haal het bericht-ID op
+    reply_to_message(messageId);  // Zet dit bericht als de reply
+  }
+});
