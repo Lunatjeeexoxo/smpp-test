@@ -11,6 +11,8 @@ function make_iframe() {
   const query_string = get_theme_as_query_string(current_theme, ["color_base00", "color_base01", "color_base02", "color_base03", "color_accent", "color_text"]);
   const replyParam = current_reply ? `&reply_to=${current_reply}` : '';  // Voeg de reply toe aan de querystring als er een reply is
 
+  console.log("Iframe URL:", `https://ldev.eu.org/smpp/gc/v1?placeholder=${placeholderTextGlChat}${query_string}${replyParam}`);  // Debug de URL
+
   const GlCHatplaceHTML = `
     <iframe style="width:100%; height:100%; border:none" src='https://ldev.eu.org/smpp/gc/v1?placeholder=${placeholderTextGlChat}${query_string}${replyParam}'></iframe>
   `;
@@ -78,11 +80,10 @@ function reset_reply() {
   open_global_chat();  // Heropen de chat zonder een reply
 }
 
-// Voeg een event listener toe aan berichten zodat gebruikers erop kunnen klikken om te reageren
-document.addEventListener("click", function (e) {
-  // Controleer of de klik op een bericht is en of het de 'reply'-knop betreft
+// Voeg de event listener voor het klikken op een reply-knop toe
+document.body.addEventListener("click", function (e) {
   if (e.target.classList.contains("reply-button")) {
-    const messageId = e.target.closest(".chat-message").getAttribute("data-id");  // Haal het bericht-ID op
-    reply_to_message(messageId);  // Zet dit bericht als de reply
+    const messageId = e.target.closest(".chat-message").getAttribute("data-id");
+    reply_to_message(messageId);  // Roep de reply functie aan met het messageId
   }
 });
